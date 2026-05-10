@@ -1,0 +1,18 @@
+# Build outputs
+build/
+*.pdb
+*.obj
+*.exe
+*.out
+*.o
+
+# IDE
+.vs/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
