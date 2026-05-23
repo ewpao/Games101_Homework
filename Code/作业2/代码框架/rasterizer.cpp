@@ -54,7 +54,7 @@ static bool insideTriangle(float x, float y, const Vector3f* _v)
     z3 = CA[0] * CP[1] - CA[1] * CP[0];
 
     bool inside = (z1 > 0 && z2 > 0 && z3 > 0) || (z1 < 0 && z2 < 0 && z3 < 0);
-    //只需判断Z轴正负
+    //only need to calculate the Z axis
 
     return inside;
 
@@ -124,9 +124,43 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t)
     auto v = t.toVector4();
 
     // TODO : Find out the bounding box of current triangle.
-    Eigen::Vector4f  min = { 1,2,3,4 };
-    // iterate through the pixel and find if the current pixel is inside the triangle
+    float min_x = FLT_MAX;
+    float max_x = FLT_MIN;
+    float min_y = FLT_MAX;
+    float max_y = FLT_MIN;
 
+    for (const auto& point : v)
+    {
+        min_x = std::min(min_x, point.x());
+        max_x = std::max(max_x, point.x());
+        min_y = std::min(min_y, point.y());
+        max_y = std::max(max_y, point.y());
+    }
+    // iterate through the pixel and find if the current pixel is inside the triangle
+    for (int y = floor(min_y); y <= ceil(max_y); ++y)
+    {
+        for (int x = floor(min_x); x <= ceil(max_x); ++x)
+        {
+            float pixel_x = x + 0.5f;
+            float pixel_y = y + 0.5f;
+
+            if (insideTriangle(pixel_x, pixel_y, t.v))
+            {
+                auto [alpha, beta, gamma] = computeBarycentric2D(pixel_x, pixel_y, t.v);
+                float w_reciprocal = 1.0/(alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
+                float z_interpolated = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
+                z_interpolated *= w_reciprocal;
+
+                int index = get_index(x, y);
+                if (z_interpolated < depth_buf[index])
+                {
+                    Vector3f point = Vector3f(x, y, z_interpolated);
+                    set_pixel(point, t.getColor());
+                    depth_buf[index] = z_interpolated;
+                }
+            }
+        }
+    }
     // If so, use the following code to get the interpolated z value.
     //auto[alpha, beta, gamma] = computeBarycentric2D(x, y, t.v);
     //float w_reciprocal = 1.0/(alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
