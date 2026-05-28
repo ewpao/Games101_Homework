@@ -122,41 +122,41 @@ void rst::rasterizer::draw(pos_buf_id pos_buffer, ind_buf_id ind_buffer, col_buf
 void rst::rasterizer::rasterize_triangle(const Triangle& t) 
 {
     auto v = t.toVector4();
+    float min_x = std::min(v[0].x(), std::min(v[1].x(), v[2].x()));
+    float max_x = std::max(v[0].x(), std::max(v[1].x(), v[2].x()));
+    float min_y = std::min(v[0].y(), std::min(v[1].y(), v[2].y()));
+    float max_y = std::max(v[0].y(), std::max(v[1].y(), v[2].y()));
 
-    // TODO : Find out the bounding box of current triangle.
-    float min_x = FLT_MAX;
-    float max_x = FLT_MIN;
-    float min_y = FLT_MAX;
-    float max_y = FLT_MIN;
+    int x_min = std::max(0,          (int)std::floor(min_x));
+    int x_max = std::min(width - 1,  (int)std::ceil(max_x));
+    int y_min = std::max(0,          (int)std::floor(min_y));
+    int y_max = std::min(height - 1, (int)std::ceil(max_y));
 
-    for (const auto& point : v)
+    for(int x = x_min; x <= x_max; x++)
     {
-        min_x = std::min(min_x, point.x());
-        max_x = std::max(max_x, point.x());
-        min_y = std::min(min_y, point.y());
-        max_y = std::max(max_y, point.y());
-    }
-    // iterate through the pixel and find if the current pixel is inside the triangle
-    for (int y = floor(min_y); y <= ceil(max_y); ++y)
-    {
-        for (int x = floor(min_x); x <= ceil(max_x); ++x)
+        for(int y = y_min; y <= y_max; y++)
         {
+            // 采像素中心点
             float pixel_x = x + 0.5f;
             float pixel_y = y + 0.5f;
 
-            if (insideTriangle(pixel_x, pixel_y, t.v))
+            if(insideTriangle(pixel_x, pixel_y, t.v))
             {
+                // 插值计算深度
                 auto [alpha, beta, gamma] = computeBarycentric2D(pixel_x, pixel_y, t.v);
-                float w_reciprocal = 1.0/(alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
-                float z_interpolated = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
+                float w_reciprocal = 1.0f / (alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
+                float z_interpolated = alpha * v[0].z() / v[0].w()
+                                     + beta  * v[1].z() / v[1].w()
+                                     + gamma * v[2].z() / v[2].w();
                 z_interpolated *= w_reciprocal;
 
+                // 深度测试：比较 depth_buf，用 get_index
                 int index = get_index(x, y);
-                if (z_interpolated < depth_buf[index])
+                if(z_interpolated < depth_buf[index])
                 {
-                    Vector3f point = Vector3f(x, y, z_interpolated);
-                    set_pixel(point, t.getColor());
                     depth_buf[index] = z_interpolated;
+                    Eigen::Vector3f point((float)x, (float)y, 1.0f);
+                    set_pixel(point, t.getColor());
                 }
             }
         }
